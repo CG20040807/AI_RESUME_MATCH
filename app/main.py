@@ -1,38 +1,14 @@
 import sys
 from pathlib import Path
 import os
+import streamlit as st
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
 
 st.write("FILES IN CORE:", os.listdir(ROOT_DIR / "core"))
-# ================== 🚨 强制锁定 repo root ==================
 
-CURRENT = Path(__file__).resolve()
-
-# app/main.py → 往上两层 = repo root
-ROOT_DIR = CURRENT.parents[2]
-
-# 如果失败（防御式）
-if not (ROOT_DIR / "core").exists():
-    ROOT_DIR = CURRENT.parents[1]
-
-if not (ROOT_DIR / "core").exists():
-    raise RuntimeError(
-        f"Cannot find core/ directory. ROOT_DIR = {ROOT_DIR}"
-    )
-
-sys.path.insert(0, str(ROOT_DIR))
-import streamlit as st
-
-st.write("ROOT_DIR:", ROOT_DIR)
-st.write("CORE EXISTS:", (ROOT_DIR / "core").exists())
-import os
-import sys
-import streamlit as st
-from pathlib import Path
-
-st.write("cwd =", os.getcwd())
-st.write("ROOT_DIR =", ROOT_DIR)
-st.write("sys.path[0] =", sys.path[0])
-st.write("core path =", ROOT_DIR / "core")
+from core.ranker import rank_candidates
 # ================== 项目模块（必须在路径修复后导入） ==================
 
 from core.analyzer import analyze
