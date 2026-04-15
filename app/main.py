@@ -16,7 +16,7 @@ from utils.text_cleaner import clean_text
 
 from core.analyzer import analyze
 from core.scorer import extract_score
-from core.ranker import rank_candidates
+from ai_resume_match.core.ranker import rank_candidates
 from core.summarizer import summarize
 
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
