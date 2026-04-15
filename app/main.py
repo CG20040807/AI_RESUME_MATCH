@@ -1,15 +1,23 @@
 import sys
 import os
+import re
+import io
+
+from typing import List, Dict, Any
+
+# ================== 路径修复（稳定版本） ==================
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
-sys.path.append(PROJECT_ROOT)
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+# ================== Streamlit ==================
 
 import streamlit as st
+
+# ================== 核心模块（保持你原结构，不改命名） ==================
 
 from core.analyzer import analyze
 from core.scorer import extract_score
@@ -19,6 +27,7 @@ from core.summarizer import summarize
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
 
+# Word 导出（容错）
 try:
     from utils.docx_exporter import export_to_docx
 except Exception:
@@ -29,132 +38,52 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
-st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
+# ================== 页面配置 ==================
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background: linear-gradient(180deg, #f7fbff 0%, #ffffff 28%, #f8fbf8 100%);
-        color: #1f2937;
-    }
-    .block-container {
-        padding-top: 1.2rem;
-        padding-bottom: 2.5rem;
-    }
-    .main-title {
-        font-size: 2.1rem;
-        font-weight: 800;
-        color: #153b63;
-        margin-bottom: 0.2rem;
-    }
-    .sub-title {
-        font-size: 1rem;
-        color: #4b5563;
-        margin-top: 0;
-    }
-    .metric-card {
-        background: #ffffff;
-        border: 1px solid rgba(148,163,184,0.20);
-        border-radius: 18px;
-        padding: 16px;
-        box-shadow: 0 8px 24px rgba(15,23,42,0.05);
-        height: 100%;
-    }
-    .small-note {
-        color: #6b7280;
-        font-size: 0.88rem;
-    }
-    div[data-testid="stFileUploaderDropzone"] {
-        border: 2px dashed #9cc3de;
-        background: #f9fdff;
-        border-radius: 16px;
-    }
-    button[kind="primary"] {
-        border-radius: 14px !important;
-        padding: 0.6rem 1rem !important;
-        font-weight: 700 !important;
-        background: linear-gradient(135deg, #2563eb, #0f766e) !important;
-        border: none !important;
-    }
-    .stDownloadButton button {
-        border-radius: 14px !important;
-        padding: 0.6rem 1rem !important;
-        font-weight: 700 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="AI Talent Assessment System",
+    layout="wide"
 )
+
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(180deg, #f7fbff 0%, #ffffff 30%, #f8fbf8 100%);
+}
+
+.main-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #1f3b57;
+}
+
+.sub-title {
+    font-size: 1rem;
+    color: #6b7280;
+    margin-bottom: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown('<div class="main-title">AI Talent Assessment System</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="sub-title">批量上传 Word 简历，粘贴岗位标准，自动匹配岗位 JD，输出多维评分、排名、总结，并可一键下载 Word 报告。</div>',
-    unsafe_allow_html=True,
-)
+st.markdown('<div class="sub-title">批量简历分析 · 排名 · 总结 · 报告导出</div>', unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown("### 参数设置")
-    st.text_input(
-        "API Base URL",
-        value="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        disabled=True
-    )
-    st.caption("千问模型接口使用阿里云兼容地址")
-    st.markdown("---")
-    st.markdown("上传格式仅支持 .docx")
-    st.markdown("建议同一批简历对应同一个岗位")
-    st.markdown("如果你要部署到 Streamlit Cloud，确保 .env 不要上传到仓库")
 
-col1, col2 = st.columns([1.15, 0.85], gap="large")
-
-with col1:
-    st.markdown("### 1）输入岗位信息")
-    job_title = st.text_input(
-        "岗位名称",
-        placeholder="例如：HRBP实习生 / AI产品经理 / 数据分析实习生"
-    )
-    jd = st.text_area(
-        "岗位JD",
-        height=180,
-        placeholder="请输入岗位职责、要求、加分项等"
-    )
-    criteria = st.text_area(
-        "岗位评估标准",
-        height=180,
-        placeholder=(
-            "例如：\n"
-            "1. 技能维度：Python、数据处理、Prompt设计\n"
-            "2. 经验维度：有实习或项目落地经历\n"
-            "3. 软技能：沟通表达清晰，主动性强\n"
-            "4. 风险项：没有项目经历、无法独立完成任务的优先级降低"
-        )
-    )
-
-with col2:
-    st.markdown("### 2）上传 Word 简历")
-    uploaded_files = st.file_uploader(
-        "请上传候选人 Word 简历（仅支持 .docx，可多选）",
-        type=["docx"],
-        accept_multiple_files=True
-    )
-    st.markdown(
-        "<div class='small-note'>支持格式：.docx；不建议上传 pdf / 图片 / 压缩包。</div>",
-        unsafe_allow_html=True
-    )
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-analyze_clicked = st.button("开始批量评估", type="primary")
+# ================== Session 初始化 ==================
 
 if "results" not in st.session_state:
     st.session_state.results = []
+
 if "summary" not in st.session_state:
     st.session_state.summary = ""
+
 if "word_bytes" not in st.session_state:
     st.session_state.word_bytes = None
 
-def build_local_docx_report(job_title_text: str, jd_text: str, criteria_text: str, results: List[Dict[str, Any]], summary_text: str):
+
+# ================== Word fallback ==================
+
+def build_docx(job_title, jd, criteria, results, summary):
     doc = Document()
 
     title = doc.add_paragraph()
@@ -163,27 +92,21 @@ def build_local_docx_report(job_title_text: str, jd_text: str, criteria_text: st
     run.bold = True
     run.font.size = Pt(18)
 
-    doc.add_paragraph("")
-
     doc.add_heading("岗位名称", level=1)
-    doc.add_paragraph(job_title_text)
+    doc.add_paragraph(job_title)
 
     doc.add_heading("岗位JD", level=1)
-    doc.add_paragraph(jd_text)
+    doc.add_paragraph(jd)
 
-    doc.add_heading("岗位评估标准", level=1)
-    doc.add_paragraph(criteria_text if criteria_text.strip() else "未填写")
+    doc.add_heading("评估标准", level=1)
+    doc.add_paragraph(criteria)
 
-    doc.add_heading("综合总结", level=1)
-    doc.add_paragraph(summary_text)
+    doc.add_heading("总结", level=1)
+    doc.add_paragraph(summary)
 
-    doc.add_heading("候选人排名", level=1)
-    for idx, r in enumerate(results, start=1):
-        doc.add_paragraph(f"{idx}. {r['name']} - {r['score']}分 - {r.get('recommendation', '未提取')}")
-
-    for idx, r in enumerate(results, start=1):
+    for i, r in enumerate(results):
         doc.add_page_break()
-        doc.add_heading(f"候选人详情：{idx}. {r['name']}", level=1)
+        doc.add_heading(f"{i+1}. {r['name']}（{r['score']}分）", level=1)
         doc.add_paragraph(r["analysis"])
 
     buffer = io.BytesIO()
@@ -191,140 +114,130 @@ def build_local_docx_report(job_title_text: str, jd_text: str, criteria_text: st
     buffer.seek(0)
     return buffer
 
-if analyze_clicked:
+
+# ================== 输入区 ==================
+
+col1, col2 = st.columns([1.2, 1])
+
+with col1:
+    job_title = st.text_input("岗位名称")
+    jd = st.text_area("岗位JD", height=180)
+    criteria = st.text_area("评估标准", height=180)
+
+with col2:
+    uploaded_files = st.file_uploader(
+        "上传简历（.docx）",
+        type=["docx"],
+        accept_multiple_files=True
+    )
+
+
+# ================== 主流程 ==================
+
+if st.button("开始分析"):
+
+    # ---------- 校验 ----------
     if not job_title.strip():
-        st.warning("请先输入岗位名称。")
+        st.warning("请输入岗位名称")
         st.stop()
+
     if not jd.strip():
-        st.warning("请先输入岗位JD。")
+        st.warning("请输入岗位JD")
         st.stop()
+
     if not criteria.strip():
-        st.warning("请先输入岗位评估标准。")
+        st.warning("请输入评估标准")
         st.stop()
+
     if not uploaded_files:
-        st.warning("请至少上传一份 Word 简历。")
+        st.warning("请上传简历")
         st.stop()
 
-    with st.spinner("AI正在分析中，请稍候..."):
-        results = []
-        progress_bar = st.progress(0, text="正在处理简历...")
-        total = len(uploaded_files)
+    # ---------- 初始化 ----------
+    results = []
+    total = len(uploaded_files)
+    progress = st.progress(0)
 
-        for idx, file in enumerate(uploaded_files, start=1):
-            raw_text = parse_docx(file)
+    # ---------- 批处理 ----------
+    for i, file in enumerate(uploaded_files):
 
-            if not isinstance(raw_text, str) or "错误" in raw_text or "失败" in raw_text or not raw_text.strip():
-                results.append({
-                    "name": file.name,
-                    "analysis": raw_text if isinstance(raw_text, str) else "【解析失败】返回内容无效",
-                    "score": 0,
-                    "recommendation": "无法评估"
-                })
-                progress_bar.progress(idx / total, text=f"已处理 {idx}/{total}")
-                continue
+        raw_text = parse_docx(file)
 
-            clean_resume = clean_text(raw_text)
-
-            analysis = analyze(job_title, jd, criteria, clean_resume)
-            score = extract_score(analysis)
-
-            recommendation = "未提取"
-            m = re.search(r"推荐建议[:：]\s*(.+)", analysis)
-            if m:
-                recommendation = m.group(1).strip().split("\n")[0]
-
+        if not raw_text or "错误" in raw_text:
             results.append({
                 "name": file.name,
-                "analysis": analysis,
-                "score": score,
-                "recommendation": recommendation
+                "analysis": "解析失败",
+                "score": 0,
+                "recommendation": "无法评估"
             })
+            continue
 
-            progress_bar.progress(idx / total, text=f"已处理 {idx}/{total}")
+        text = clean_text(raw_text)
 
-        ranked_results = rank_candidates(results)
-        summary = summarize(job_title, jd, criteria, ranked_results)
+        analysis = analyze(job_title, jd, criteria, text)
+        score = extract_score(analysis)
 
-        if export_to_docx:
-            try:
-                word_file = export_to_docx(job_title, jd, criteria, ranked_results, summary)
-            except Exception:
-                word_file = build_local_docx_report(job_title, jd, criteria, ranked_results, summary)
-        else:
-            word_file = build_local_docx_report(job_title, jd, criteria, ranked_results, summary)
+        # 推荐提取（保持你原逻辑）
+        rec = "未提取"
+        m = re.search(r"推荐建议[:：]\s*(.*)", analysis, re.S)
+        if m:
+            rec = m.group(1).strip()
 
-        st.session_state.results = ranked_results
-        st.session_state.summary = summary
-        st.session_state.word_bytes = word_file
+        results.append({
+            "name": file.name,
+            "analysis": analysis,
+            "score": score,
+            "recommendation": rec
+        })
 
-    st.success("分析完成，请先查看页面结果，再决定是否下载 Word 报告。")
+        progress.progress((i + 1) / total)
+
+    # ---------- 排序 + 总结 ----------
+    ranked = rank_candidates(results)
+    summary = summarize(job_title, jd, criteria, ranked)
+
+    # ---------- Word 导出 ----------
+    if export_to_docx:
+        try:
+            word_file = export_to_docx(job_title, jd, criteria, ranked, summary)
+        except Exception:
+            word_file = build_docx(job_title, jd, criteria, ranked, summary)
+    else:
+        word_file = build_docx(job_title, jd, criteria, ranked, summary)
+
+    # ---------- 存 session ----------
+    st.session_state.results = ranked
+    st.session_state.summary = summary
+    st.session_state.word_bytes = word_file
+
+
+# ================== 展示区 ==================
 
 if st.session_state.results:
+
     ranked = st.session_state.results
     summary = st.session_state.summary
 
-    st.markdown("## 3）结果总览")
-
     top = ranked[0]
+
     c1, c2, c3 = st.columns(3)
 
-    with c1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="small-note">推荐候选人</div>
-                <div style="font-size:1.25rem;font-weight:800;color:#153b63;">{top['name']}</div>
-                <div class="small-note">总分最高</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    with c2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="small-note">最高总分</div>
-                <div style="font-size:1.8rem;font-weight:900;color:#0f766e;">{top['score']}/100</div>
-                <div class="small-note">综合得分</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    with c3:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="small-note">推荐建议</div>
-                <div style="font-size:1.25rem;font-weight:800;color:#b45309;">{top.get('recommendation', '未提取')}</div>
-                <div class="small-note">模型输出</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    c1.metric("最佳候选人", top["name"])
+    c2.metric("最高分", top["score"])
+    c3.metric("推荐意见", top["recommendation"])
 
-    st.markdown("### 3.1 候选人排名")
-    for idx, r in enumerate(ranked, start=1):
-        with st.container(border=True):
-            head_col1, head_col2 = st.columns([0.78, 0.22])
-            with head_col1:
-                st.markdown(f"#### {idx}. {r['name']}")
-                st.caption(f"总分：{r['score']}/100 · 推荐建议：{r.get('recommendation', '未提取')}")
-            with head_col2:
-                st.metric("总分", f"{r['score']}")
+    st.markdown("## 排名结果")
 
-            st.markdown("**评估正文**")
-            st.markdown(r["analysis"])
+    for i, r in enumerate(ranked):
+        with st.expander(f"{i+1}. {r['name']}（{r['score']}分）"):
+            st.write(r["analysis"])
 
-    st.markdown("### 3.2 全局总结")
-    st.markdown(summary)
+    st.markdown("## 总结")
+    st.write(summary)
 
-    st.markdown("### 3.3 下载结果")
     if st.session_state.word_bytes:
         st.download_button(
-            label="下载 Word 报告",
-            data=st.session_state.word_bytes,
-            file_name="AI_Talent_Assessment_Report.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "下载Word报告",
+            st.session_state.word_bytes,
+            file_name="AI_Talent_Report.docx"
         )
-else:
-    st.info("请先填写岗位名称、JD、评估标准，上传多份 Word 简历，然后点击“开始批量评估”。")
