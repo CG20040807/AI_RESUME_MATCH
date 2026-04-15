@@ -12,7 +12,7 @@ import streamlit as st
 
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
-from utils.docx_exporter import export_to_docx
+
 
 from core.analyzer import analyze
 from core.scorer import extract_score
@@ -191,13 +191,8 @@ if analyze_clicked:
 
         ranked_results = rank_candidates(results)
         summary = summarize(job_title, jd, criteria, ranked_results)
-        word_file = export_to_docx(job_title, jd, criteria, ranked_results, summary)
-
-        st.session_state.results = ranked_results
-        st.session_state.summary = summary
-        st.session_state.word_bytes = word_file
-
-    st.success("分析完成，请先查看页面结果，再决定是否下载 Word 报告。")
+       
+   
 
 if st.session_state.results:
     ranked = st.session_state.results
