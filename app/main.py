@@ -22,6 +22,15 @@ import streamlit as st
 
 st.write("ROOT_DIR:", ROOT_DIR)
 st.write("CORE EXISTS:", (ROOT_DIR / "core").exists())
+import os
+import sys
+import streamlit as st
+from pathlib import Path
+
+st.write("cwd =", os.getcwd())
+st.write("ROOT_DIR =", ROOT_DIR)
+st.write("sys.path[0] =", sys.path[0])
+st.write("core path =", ROOT_DIR / "core")
 # ================== 项目模块（必须在路径修复后导入） ==================
 
 from core.analyzer import analyze
