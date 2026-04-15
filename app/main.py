@@ -7,7 +7,10 @@ from core.ranker import rank
 from core.summarizer import summarize
 from utils.docx_exporter import export
 import re
+import sys
+import os
 
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
 
 st.markdown(
