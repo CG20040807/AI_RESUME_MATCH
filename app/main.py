@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
+import os
 
+st.write("FILES IN CORE:", os.listdir(ROOT_DIR / "core"))
 # ================== 🚨 强制锁定 repo root ==================
 
 CURRENT = Path(__file__).resolve()
