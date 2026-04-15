@@ -1,3 +1,16 @@
+import sys
+import os
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+print("DEBUG PATH:", sys.path)  # 可删，用于验证
+
+# 再写你的原有 import
+from utils.file_parser import parse_docx
 import streamlit as st
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
@@ -7,11 +20,7 @@ from core.ranker import rank
 from core.summarizer import summarize
 from utils.docx_exporter import export
 import re
-import sys
-import os
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT_DIR)
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
 
 st.markdown(
