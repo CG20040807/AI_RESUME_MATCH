@@ -36,7 +36,10 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+import streamlit as st
 
+st.write("ROOT_DIR:", ROOT_DIR)
+st.write("CORE EXISTS:", (ROOT_DIR / "core").exists())
 # ================== 页面配置 ==================
 
 st.set_page_config(
