@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -7,19 +8,16 @@ ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-print("DEBUG PATH:", sys.path)  # 可删，用于验证
-
-# 再写你的原有 import
-from utils.file_parser import parse_docx
 import streamlit as st
+
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
+from utils.docx_exporter import export_to_docx
+
 from core.analyzer import analyze
 from core.scorer import extract_score
-from core.ranker import rank
+from core.ranker import rank_candidates
 from core.summarizer import summarize
-from utils.docx_exporter import export
-import re
 
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
 
@@ -96,8 +94,15 @@ col1, col2 = st.columns([1.15, 0.85], gap="large")
 
 with col1:
     st.markdown("### 1）输入岗位信息")
-    job_title = st.text_input("岗位名称", placeholder="例如：HRBP实习生 / AI产品经理 / 数据分析实习生")
-    jd = st.text_area("岗位JD", height=180, placeholder="请输入岗位职责、要求、加分项等")
+    job_title = st.text_input(
+        "岗位名称",
+        placeholder="例如：HRBP实习生 / AI产品经理 / 数据分析实习生"
+    )
+    jd = st.text_area(
+        "岗位JD",
+        height=180,
+        placeholder="请输入岗位职责、要求、加分项等"
+    )
     criteria = st.text_area(
         "岗位评估标准",
         height=180,
@@ -140,16 +145,34 @@ if analyze_clicked:
     if not jd.strip():
         st.warning("请先输入岗位JD。")
         st.stop()
+    if not criteria.strip():
+        st.warning("请先输入岗位评估标准。")
+        st.stop()
     if not uploaded_files:
         st.warning("请至少上传一份 Word 简历。")
         st.stop()
 
     with st.spinner("AI正在分析中，请稍候..."):
         results = []
+        progress_bar = st.progress(0, text="正在处理简历...")
+        total = len(uploaded_files)
 
-        for file in uploaded_files:
-            resume_text = clean_text(parse_docx(file))
-            analysis = analyze(job_title, jd, criteria, resume_text)
+        for idx, file in enumerate(uploaded_files, start=1):
+            raw_text = parse_docx(file)
+
+            if "错误" in raw_text or "失败" in raw_text:
+                results.append({
+                    "name": file.name,
+                    "analysis": raw_text,
+                    "score": 0,
+                    "recommendation": "无法评估"
+                })
+                progress_bar.progress(idx / total, text=f"已处理 {idx}/{total}")
+                continue
+
+            clean_resume = clean_text(raw_text)
+
+            analysis = analyze(job_title, jd, criteria, clean_resume)
             score = extract_score(analysis)
 
             recommendation = "未提取"
@@ -164,11 +187,13 @@ if analyze_clicked:
                 "recommendation": recommendation
             })
 
-        ranked = rank(results)
-        summary = summarize(job_title, jd, criteria, ranked)
-        word_file = export(ranked, summary, job_title, jd, criteria)
+            progress_bar.progress(idx / total, text=f"已处理 {idx}/{total}")
 
-        st.session_state.results = ranked
+        ranked_results = rank_candidates(results)
+        summary = summarize(job_title, jd, criteria, ranked_results)
+        word_file = export_to_docx(job_title, jd, criteria, ranked_results, summary)
+
+        st.session_state.results = ranked_results
         st.session_state.summary = summary
         st.session_state.word_bytes = word_file
 
@@ -189,6 +214,7 @@ if st.session_state.results:
             <div class="metric-card">
                 <div class="small-note">推荐候选人</div>
                 <div style="font-size:1.25rem;font-weight:800;color:#153b63;">{top['name']}</div>
+                <div class="small-note">总分最高</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -199,6 +225,7 @@ if st.session_state.results:
             <div class="metric-card">
                 <div class="small-note">最高总分</div>
                 <div style="font-size:1.8rem;font-weight:900;color:#0f766e;">{top['score']}/100</div>
+                <div class="small-note">综合得分</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -208,7 +235,8 @@ if st.session_state.results:
             f"""
             <div class="metric-card">
                 <div class="small-note">推荐建议</div>
-                <div style="font-size:1.25rem;font-weight:800;color:#b45309;">{top.get('recommendation','未提取')}</div>
+                <div style="font-size:1.25rem;font-weight:800;color:#b45309;">{top.get('recommendation', '未提取')}</div>
+                <div class="small-note">模型输出</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -217,11 +245,11 @@ if st.session_state.results:
     st.markdown("### 3.1 候选人排名")
     for idx, r in enumerate(ranked, start=1):
         with st.container(border=True):
-            left, right = st.columns([0.78, 0.22])
-            with left:
+            head_col1, head_col2 = st.columns([0.78, 0.22])
+            with head_col1:
                 st.markdown(f"#### {idx}. {r['name']}")
                 st.caption(f"总分：{r['score']}/100 · 推荐建议：{r.get('recommendation', '未提取')}")
-            with right:
+            with head_col2:
                 st.metric("总分", f"{r['score']}")
 
             st.markdown("**评估正文**")
@@ -239,4 +267,4 @@ if st.session_state.results:
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
 else:
-    st.info("请先填写岗位名称、JD、评估标准，并上传多份 Word 简历，然后点击“开始批量评估”。")
+    st.info("请先填写岗位名称、JD、评估标准，上传多份 Word 简历，然后点击“开始批量评估”。")
