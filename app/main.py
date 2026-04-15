@@ -1,15 +1,14 @@
 import sys
 from pathlib import Path
-import re
-import io
 
-import streamlit as st
+# ================== 🚨 强制定位项目根目录 ==================
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
-# ================== 🚨 路径修复（Streamlit Cloud 稳定版） ==================
+# fallback（防止结构变化）
+if not (ROOT_DIR / "core").exists():
+    ROOT_DIR = Path(__file__).resolve().parents[1]
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
-
 # ================== 项目模块（必须在路径修复后导入） ==================
 
 from core.analyzer import analyze
