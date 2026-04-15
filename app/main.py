@@ -1,11 +1,10 @@
 import sys
 import os
-import re
-import io
-from typing import List, Dict, Any
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+
+sys.path.append(PROJECT_ROOT)
 
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
