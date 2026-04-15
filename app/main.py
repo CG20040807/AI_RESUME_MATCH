@@ -1,6 +1,8 @@
 import sys
 import os
 import re
+import io
+from typing import List, Dict, Any
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -10,14 +12,23 @@ if ROOT_DIR not in sys.path:
 
 import streamlit as st
 
+from core.analyzer import analyze
+from core.scorer import extract_score
+from core.ranker import rank_candidates
+from core.summarizer import summarize
+
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
 
+try:
+    from utils.docx_exporter import export_to_docx
+except Exception:
+    export_to_docx = None
 
-from core.analyzer import analyze
-from core.scorer import extract_score
-from ai_resume_match.core.ranker import rank_candidates
-from core.summarizer import summarize
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
 
@@ -51,6 +62,15 @@ st.markdown(
         box-shadow: 0 8px 24px rgba(15,23,42,0.05);
         height: 100%;
     }
+    .small-note {
+        color: #6b7280;
+        font-size: 0.88rem;
+    }
+    div[data-testid="stFileUploaderDropzone"] {
+        border: 2px dashed #9cc3de;
+        background: #f9fdff;
+        border-radius: 16px;
+    }
     button[kind="primary"] {
         border-radius: 14px !important;
         padding: 0.6rem 1rem !important;
@@ -58,24 +78,20 @@ st.markdown(
         background: linear-gradient(135deg, #2563eb, #0f766e) !important;
         border: none !important;
     }
-    div[data-testid="stFileUploaderDropzone"] {
-        border: 2px dashed #9cc3de;
-        background: #f9fdff;
-        border-radius: 16px;
-    }
-    .small-note {
-        color: #6b7280;
-        font-size: 0.88rem;
+    .stDownloadButton button {
+        border-radius: 14px !important;
+        padding: 0.6rem 1rem !important;
+        font-weight: 700 !important;
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 st.markdown('<div class="main-title">AI Talent Assessment System</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="sub-title">批量上传 Word 简历，粘贴岗位标准，自动匹配岗位 JD，输出多维评分、排名、总结，并可一键下载 Word 报告。</div>',
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 with st.sidebar:
@@ -89,6 +105,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("上传格式仅支持 .docx")
     st.markdown("建议同一批简历对应同一个岗位")
+    st.markdown("如果你要部署到 Streamlit Cloud，确保 .env 不要上传到仓库")
 
 col1, col2 = st.columns([1.15, 0.85], gap="large")
 
@@ -138,6 +155,43 @@ if "summary" not in st.session_state:
 if "word_bytes" not in st.session_state:
     st.session_state.word_bytes = None
 
+def build_local_docx_report(job_title_text: str, jd_text: str, criteria_text: str, results: List[Dict[str, Any]], summary_text: str):
+    doc = Document()
+
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run("AI Talent Assessment Report")
+    run.bold = True
+    run.font.size = Pt(18)
+
+    doc.add_paragraph("")
+
+    doc.add_heading("岗位名称", level=1)
+    doc.add_paragraph(job_title_text)
+
+    doc.add_heading("岗位JD", level=1)
+    doc.add_paragraph(jd_text)
+
+    doc.add_heading("岗位评估标准", level=1)
+    doc.add_paragraph(criteria_text if criteria_text.strip() else "未填写")
+
+    doc.add_heading("综合总结", level=1)
+    doc.add_paragraph(summary_text)
+
+    doc.add_heading("候选人排名", level=1)
+    for idx, r in enumerate(results, start=1):
+        doc.add_paragraph(f"{idx}. {r['name']} - {r['score']}分 - {r.get('recommendation', '未提取')}")
+
+    for idx, r in enumerate(results, start=1):
+        doc.add_page_break()
+        doc.add_heading(f"候选人详情：{idx}. {r['name']}", level=1)
+        doc.add_paragraph(r["analysis"])
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 if analyze_clicked:
     if not job_title.strip():
         st.warning("请先输入岗位名称。")
@@ -160,10 +214,10 @@ if analyze_clicked:
         for idx, file in enumerate(uploaded_files, start=1):
             raw_text = parse_docx(file)
 
-            if "错误" in raw_text or "失败" in raw_text:
+            if not isinstance(raw_text, str) or "错误" in raw_text or "失败" in raw_text or not raw_text.strip():
                 results.append({
                     "name": file.name,
-                    "analysis": raw_text,
+                    "analysis": raw_text if isinstance(raw_text, str) else "【解析失败】返回内容无效",
                     "score": 0,
                     "recommendation": "无法评估"
                 })
@@ -191,8 +245,20 @@ if analyze_clicked:
 
         ranked_results = rank_candidates(results)
         summary = summarize(job_title, jd, criteria, ranked_results)
-       
-   
+
+        if export_to_docx:
+            try:
+                word_file = export_to_docx(job_title, jd, criteria, ranked_results, summary)
+            except Exception:
+                word_file = build_local_docx_report(job_title, jd, criteria, ranked_results, summary)
+        else:
+            word_file = build_local_docx_report(job_title, jd, criteria, ranked_results, summary)
+
+        st.session_state.results = ranked_results
+        st.session_state.summary = summary
+        st.session_state.word_bytes = word_file
+
+    st.success("分析完成，请先查看页面结果，再决定是否下载 Word 报告。")
 
 if st.session_state.results:
     ranked = st.session_state.results
