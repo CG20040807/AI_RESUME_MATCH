@@ -1,19 +1,21 @@
 import sys
 from pathlib import Path
 
-# ================== 🚨 自动定位 repo root（最稳版本） ==================
+# ================== 🚨 强制锁定 repo root ==================
 
 CURRENT = Path(__file__).resolve()
 
-# main.py 在 app/ 下，所以往上找两层才是 repo root
-ROOT_DIR = CURRENT.parents[1]
+# app/main.py → 往上两层 = repo root
+ROOT_DIR = CURRENT.parents[2]
 
-# 兜底：防止部署环境变化
+# 如果失败（防御式）
 if not (ROOT_DIR / "core").exists():
-    ROOT_DIR = CURRENT.parents[2]
+    ROOT_DIR = CURRENT.parents[1]
 
 if not (ROOT_DIR / "core").exists():
-    raise RuntimeError("Cannot locate project root (core/ not found)")
+    raise RuntimeError(
+        f"Cannot find core/ directory. ROOT_DIR = {ROOT_DIR}"
+    )
 
 sys.path.insert(0, str(ROOT_DIR))
 # ================== 项目模块（必须在路径修复后导入） ==================
