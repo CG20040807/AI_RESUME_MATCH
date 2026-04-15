@@ -10,7 +10,8 @@ import re
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
 st.set_page_config(page_title="AI Talent Assessment System", layout="wide")
 
 st.markdown(
