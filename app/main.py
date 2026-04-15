@@ -18,6 +18,10 @@ if not (ROOT_DIR / "core").exists():
     )
 
 sys.path.insert(0, str(ROOT_DIR))
+import streamlit as st
+
+st.write("ROOT_DIR:", ROOT_DIR)
+st.write("CORE EXISTS:", (ROOT_DIR / "core").exists())
 # ================== 项目模块（必须在路径修复后导入） ==================
 
 from core.analyzer import analyze
