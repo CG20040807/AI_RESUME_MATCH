@@ -1,29 +1,16 @@
 import sys
-import os
+from pathlib import Path
 import re
 import io
 
-from typing import List, Dict, Any
-from pathlib import Path
-import sys
-
-CURRENT_DIR = Path(__file__).resolve()
-PROJECT_ROOT = CURRENT_DIR.parents[1]  # 自动到 repo root
-
-sys.path.insert(0, str(PROJECT_ROOT))
-# ================== 路径修复（稳定版本） ==================
-
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
-
-# ================== Streamlit ==================
-
 import streamlit as st
 
-# ================== 核心模块（保持你原结构，不改命名） ==================
+# ================== 🚨 路径修复（Streamlit Cloud 稳定版） ==================
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+# ================== 项目模块（必须在路径修复后导入） ==================
 
 from core.analyzer import analyze
 from core.scorer import extract_score
@@ -33,7 +20,7 @@ from core.summarizer import summarize
 from utils.file_parser import parse_docx
 from utils.text_cleaner import clean_text
 
-# Word 导出（容错）
+# Word导出（容错）
 try:
     from utils.docx_exporter import export_to_docx
 except Exception:
@@ -75,7 +62,7 @@ st.markdown('<div class="main-title">AI Talent Assessment System</div>', unsafe_
 st.markdown('<div class="sub-title">批量简历分析 · 排名 · 总结 · 报告导出</div>', unsafe_allow_html=True)
 
 
-# ================== Session 初始化 ==================
+# ================== Session State ==================
 
 if "results" not in st.session_state:
     st.session_state.results = []
@@ -142,7 +129,7 @@ with col2:
 
 if st.button("开始分析"):
 
-    # ---------- 校验 ----------
+    # ---------- 输入校验 ----------
     if not job_title.strip():
         st.warning("请输入岗位名称")
         st.stop()
@@ -164,12 +151,12 @@ if st.button("开始分析"):
     total = len(uploaded_files)
     progress = st.progress(0)
 
-    # ---------- 批处理 ----------
+    # ---------- 批量处理 ----------
     for i, file in enumerate(uploaded_files):
 
         raw_text = parse_docx(file)
 
-        if not raw_text or "错误" in raw_text:
+        if not raw_text:
             results.append({
                 "name": file.name,
                 "analysis": "解析失败",
@@ -180,10 +167,11 @@ if st.button("开始分析"):
 
         text = clean_text(raw_text)
 
+        # ===== 核心分析 =====
         analysis = analyze(job_title, jd, criteria, text)
         score = extract_score(analysis)
 
-        # 推荐提取（保持你原逻辑）
+        # ===== 推荐提取 =====
         rec = "未提取"
         m = re.search(r"推荐建议[:：]\s*(.*)", analysis, re.S)
         if m:
@@ -211,7 +199,7 @@ if st.button("开始分析"):
     else:
         word_file = build_docx(job_title, jd, criteria, ranked, summary)
 
-    # ---------- 存 session ----------
+    # ---------- 存入 session ----------
     st.session_state.results = ranked
     st.session_state.summary = summary
     st.session_state.word_bytes = word_file
