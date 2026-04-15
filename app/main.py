@@ -4,7 +4,13 @@ import re
 import io
 
 from typing import List, Dict, Any
+from pathlib import Path
+import sys
 
+CURRENT_DIR = Path(__file__).resolve()
+PROJECT_ROOT = CURRENT_DIR.parents[1]  # 自动到 repo root
+
+sys.path.insert(0, str(PROJECT_ROOT))
 # ================== 路径修复（稳定版本） ==================
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
